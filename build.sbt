@@ -1,8 +1,8 @@
-name := """sse-chat"""
+name := """CassandraCMS"""
 
-version := "1.0"
+version := "0.1"
 
-//scalaVersion := "2.10.0"
+scalaVersion := "2.10.3"
 
 libraryDependencies ++= Seq(
 "org.webjars" % "webjars-play_2.10" % "2.2.0",
@@ -10,7 +10,8 @@ libraryDependencies ++= Seq(
   "org.webjars" % "bootstrap" % "2.3.2",
   "org.scalatest" %% "scalatest" % "1.9.1" % "test",
   "junit" % "junit" % "4.11" % "test",
-  "com.novocode" % "junit-interface" % "0.7" % "test->default"
+  "com.novocode" % "junit-interface" % "0.7" % "test->default",
+  "com.datastax.cassandra" % "cassandra-driver-core" % "2.0.0"
 )
 
 testOptions += Tests.Argument(TestFrameworks.JUnit, "-v")
@@ -25,3 +26,4 @@ Seq(
   sourceDirectory in Test <<= baseDirectory / "test",
   resourceDirectory in Compile <<= baseDirectory / "conf"
 )
+

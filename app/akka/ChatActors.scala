@@ -1,16 +1,18 @@
 package akka
 
 import akka.actor._
-
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import play.api.libs.json._
-
 import scala.language.postfixOps
 import scala.concurrent.duration._
-
 import controllers.ChatApplication
 import org.joda.time.DateTime
 import scala.util.Random
+import com.datastax.driver.core._
+import com.datastax.driver.core.exceptions._
+import com.datastax.driver.core.utils.Bytes
+import com.datastax.driver.core.utils.UUIDs
+import org.joda.time.format.ISODateTimeFormat
 
 object ChatActors {
   
@@ -21,10 +23,36 @@ object ChatActors {
   val supervisor = system.actorOf(Props(new Supervisor()), "ChatterSupervisor")
 
   case object Talk
+  
+   val maxConnections = 20
+   val concurrency = 5
+
+        val pools = new PoolingOptions()
+        pools.setMaxSimultaneousRequestsPerConnectionThreshold(HostDistance.LOCAL, concurrency)
+        pools.setCoreConnectionsPerHost(HostDistance.LOCAL, maxConnections)
+        pools.setMaxConnectionsPerHost(HostDistance.LOCAL, maxConnections)
+        pools.setCoreConnectionsPerHost(HostDistance.REMOTE, maxConnections)
+        pools.setMaxConnectionsPerHost(HostDistance.REMOTE, maxConnections)
+
+    val cluster = new Cluster.Builder()
+                                         .addContactPoints("127.0.0.1")
+                                         .withPoolingOptions(pools)
+                                         .withSocketOptions(new SocketOptions().setTcpNoDelay(true))
+                                         .build();
+ // cluster.getConfiguration().getProtocolOptions().setCompression(ProtocolOptions.Compression.LZ4);
+  
+   val session = cluster.connect();
+   
+   val statement = session.prepare("INSERT INTO cassandracms.actorlog2 " +
+      "(actor, evtid, message, room, day) " +
+      "VALUES (:actor, :evtid, :message, :room, :day);");
+   
+    val fmt = ISODateTimeFormat.date();
+
 }
 
 /** Supervisor initiating Romeo and Juliet actors and scheduling their talking */
-class Supervisor() extends Actor {
+class Supervisor() extends Actor with ActorLogging {
 
   val juliet = context.actorOf(Props(new Chatter("Juliet", Quotes.juliet)))
   context.system.scheduler.schedule(1 seconds, 8 seconds, juliet, ChatActors.Talk)
@@ -43,7 +71,11 @@ class Chatter(name: String, quotes: Seq[String]) extends Actor {
       val now: String = DateTime.now.toString
       val quote = quotes(Random.nextInt(quotes.size))
       val msg = Json.obj("room" -> "room1", "text" -> quote, "user" ->  name, "time" -> now )
-
+      
+      val boundStatement = new BoundStatement(ChatActors.statement);
+      boundStatement.bind(name,UUIDs.timeBased(),quote,"room1", DateTime.now().toString(ChatActors.fmt));
+      println(DateTime.now().toString(ChatActors.fmt))
+    ChatActors.session.execute(boundStatement);
       ChatApplication.chatChannel.push(msg)
     }
   }
